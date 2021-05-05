@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace CashRegister.Controllers
@@ -25,19 +26,18 @@ namespace CashRegister.Controllers
         {
             if (receiptLineDto == null || receiptLineDto.Count == 0) return BadRequest();
 
-            // Read product data from DB for incoming product IDs
             var products = new Dictionary<int, Product>();
 
-            // Here you have to add code that reads all products referenced by product IDs
-            // in receiptDto.Lines and store them in the `products` dictionary.
             foreach (var r in receiptLineDto)
             {
-                var product = await _context.Products.FirstOrDefaultAsync(p => p.ID == r.ProductID);
+                products[r.ProductID] = await _context.Products.FirstOrDefaultAsync(p => p.ID == r.ProductID);
+
+                if (products[r.ProductID] == null)
+                {
+                    return BadRequest($"Unknown product ID {r.ProductID}");
+                }
             }
 
-
-
-            // Build receipt from DTO
             var newReceipt = new Receipt
             {
                 ReceiptTimestamp = DateTime.UtcNow,
@@ -50,6 +50,11 @@ namespace CashRegister.Controllers
                 }).ToList()
             };
             newReceipt.TotalPrice = newReceipt.ReceiptLines.Sum(rl => rl.TotalPrice);
+
+            await _context.Receipts.AddAsync(newReceipt);
+            await _context.SaveChangesAsync();
+
+            return StatusCode((int)HttpStatusCode.Created, newReceipt);
         }
     }
 }
